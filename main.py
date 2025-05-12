@@ -7,7 +7,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse, JSONResponse    # ← 这里加上 JSONResponse
 import traceback                                            # ← 加上 traceback
 import logging                    # ← 新增
-import uvicorn, threading
+import threading
 import numpy as np
 from skopt import Optimizer
 from skopt.space import Real
@@ -718,8 +718,3 @@ def optimize(
             status_code=500,
             content={"error": str(e)}
         )
-
-
-
-# 阻塞主线程
-input("按 Enter 键退出\n")
