@@ -93,24 +93,37 @@ HTML_PAGE = """
         <input id="high_pat" type="number" step="0.01" placeholder="最高价 H上限" value="1200">
     </div>
   </label>
+    <label>胜利阈值（分）≥
+    <input id="win_thr" type="number" value="80">
+  </label>
   <label>Monte-Carlo 抽样次数 N_MC:
     <input id="n_mc" type="number" value="1000000">
   </label>
+  <label>优化器类型:
+  <select id="estimator">
+    <option value="RF" selected>随机森林</option>
+    <option value="GP">高斯过程</option>
+  </select>
+</label>
+<label>采集函数（acq_func）:
+  <select id="acq_func">
+    <option value="EI" selected>期望改进（EI）</option>
+    <option value="PI">概率改进（PI）</option>
+    <option value="LCB">下置信界（LCB）</option>
+  </select>
+</label>
   <label>贝叶斯总调用次数 n_calls:
-    <input id="n_calls" type="number" value="100">
+    <input id="n_calls" type="number" value="50">
   </label>
   <label>初始随机点次数 n_init:
-    <input id="n_init" type="number" value="20">
-  </label>
-  <label>胜利阈值（分）≥
-    <input id="win_thr" type="number" value="80">
+    <input id="n_init" type="number" value="15">
   </label>
   <button id="btn">计算最优报价</button>
 
 
 <h2>评估指定伙伴报价胜率</h2>
   <label>伙伴报价 L, M, H:
-    <div>
+    <div class="range-row">
       <input id="eval-L" type="number" step="0.01" placeholder="L" value="650">
       <input id="eval-M" type="number" step="0.01" placeholder="M" value="800">
       <input id="eval-H" type="number" step="0.01" placeholder="H" value="1200">
@@ -153,7 +166,9 @@ document.getElementById('btn').onclick = async () => {
     n_mc:     document.getElementById('n_mc').value,
     n_calls:  document.getElementById('n_calls').value,
     n_init:   document.getElementById('n_init').value,
-    win_thr:  document.getElementById('win_thr').value
+    win_thr:  document.getElementById('win_thr').value,
+    estimator: document.getElementById('estimator').value,
+    acq_func: document.getElementById('acq_func').value
   });
 
   try {
@@ -547,7 +562,9 @@ def optimize(
     n_mc:     int   = Query(160000),
     n_calls:  int   = Query(200),
     n_init:   int   = Query(50),
-    win_thr:  float = Query(80.0)
+    win_thr:  float = Query(80.0),
+    estimator: str  = Query("RF"),
+    acq_func: str  = Query("EI")    
 ):
     try:
         # —— 第一步：打印入参 —— 
@@ -620,8 +637,8 @@ def optimize(
         ]
         opt = Optimizer(
             dimensions=space,
-            base_estimator="GP",
-            acq_func="EI",
+            base_estimator=estimator,
+            acq_func=acq_func,
             random_state=42,
             n_initial_points=n_init
         )
