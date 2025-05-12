@@ -7,7 +7,6 @@ from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse, JSONResponse    # ← 这里加上 JSONResponse
 import traceback                                            # ← 加上 traceback
 import logging                    # ← 新增
-from pyngrok import ngrok
 import uvicorn, threading
 import numpy as np
 from skopt import Optimizer
