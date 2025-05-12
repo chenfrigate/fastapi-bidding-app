@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# VS Code settings
+.vscode/
+
+# Virtual environments
+biding-price/           # 你项目中出现的虚拟环境名（如有）
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Logs and local data
+*.log
+*.sqlite3
+*.db
+.DS_Store
+
+# Secrets
+.env
+*.pem
+*.key
+token.txt
+
+# OS-specific
+Thumbs.db
+ehthumbs.db
+Icon?
+
+# Pyngrok 临时文件（不在 Render 使用，但本地调试可能会产生）
+*.ngrok.*
+app.py
+appv2.py
+appv3.py
