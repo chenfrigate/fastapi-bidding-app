@@ -383,31 +383,62 @@ out.textContent = text;
 def homepage():
     return HTML_PAGE
 
-# 核心函数：计算 K
+# 核心函数：计算 K 
+# def calc_K(prices: np.ndarray) -> np.ndarray:
+#     # 排除最大、最小（若有）后求均值
+#     idx_max = prices.argmax(axis=1)
+#     idx_min = prices.argmin(axis=1)
+#     mask = np.ones_like(prices, bool)
+#     mask[np.arange(prices.shape[0]), idx_max] = False
+#     if prices.shape[1] >= 7:
+#         mask[np.arange(prices.shape[0]), idx_min] = False
+#     denom = prices.shape[1] - (2 if prices.shape[1] >= 7 else 1)
+#     return (prices * mask).sum(axis=1) / denom
+
+# 核心函数：计算 K（向量化版本） 新的评分逻辑
 def calc_K(prices: np.ndarray) -> np.ndarray:
-    # 排除最大、最小（若有）后求均值
+    n = prices.shape[1]
     idx_max = prices.argmax(axis=1)
     idx_min = prices.argmin(axis=1)
-    mask = np.ones_like(prices, bool)
-    mask[np.arange(prices.shape[0]), idx_max] = False
-    if prices.shape[1] >= 7:
+    mask = np.ones_like(prices, dtype=bool)
+    if n > 4:
+        mask[np.arange(prices.shape[0]), idx_max] = False
         mask[np.arange(prices.shape[0]), idx_min] = False
-    denom = prices.shape[1] - (2 if prices.shape[1] >= 7 else 1)
+        denom = n - 2
+    else:
+        denom = n
     return (prices * mask).sum(axis=1) / denom
 
+
 # 核心函数：按分数规则打分
+# def score(pd: np.ndarray, K: np.ndarray, thr: float) -> np.ndarray:
+#     diff = (K - pd) / K * 100
+#     # pd can be scalar or array
+#     return np.where(
+#         diff < 0,
+#         np.maximum(thr + diff, 60),
+#         np.where(
+#             diff <= 20,
+#             thr + diff,
+#             np.maximum(120 - diff, 60)
+#         )
+#     )
+
 def score(pd: np.ndarray, K: np.ndarray, thr: float) -> np.ndarray:
-    diff = (K - pd) / K * 100
-    # pd can be scalar or array
-    return np.where(
-        diff < 0,
-        np.maximum(thr + diff, 60),
+    diff_ratio = (pd - K) / K * 100
+    diff_percent = np.ceil(np.abs(diff_ratio))  # 向上取整，单位为百分比
+    scores = np.where(
+        pd == K,
+        30.0,
         np.where(
-            diff <= 20,
-            thr + diff,
-            np.maximum(120 - diff, 60)
+            pd > K,
+            np.maximum(30.0 - 0.5 * diff_percent, 0.0),
+            np.maximum(30.0 - 0.3 * diff_percent, 0.0)
         )
     )
+    return scores
+
+
 
 # Monte Carlo 估计胜率
 def estimate_win_rate(
@@ -528,28 +559,59 @@ def evaluate(
 
 
 # —— 核心计算函数 —— 
+# def calc_K_vectorized(matrix):
+#     n_total = matrix.shape[1]
+#     idx_max = matrix.argmax(axis=1)
+#     idx_min = matrix.argmin(axis=1)
+#     mask = np.ones_like(matrix, dtype=bool)
+#     mask[np.arange(matrix.shape[0]), idx_max] = False
+#     if n_total >= 7:
+#         mask[np.arange(matrix.shape[0]), idx_min] = False
+#     denom = n_total - 1 if n_total <= 6 else n_total - 2
+#     return (matrix * mask).sum(axis=1) / denom
+
+
 def calc_K_vectorized(matrix):
     n_total = matrix.shape[1]
     idx_max = matrix.argmax(axis=1)
     idx_min = matrix.argmin(axis=1)
     mask = np.ones_like(matrix, dtype=bool)
-    mask[np.arange(matrix.shape[0]), idx_max] = False
-    if n_total >= 7:
+    if n_total > 4:
+        mask[np.arange(matrix.shape[0]), idx_max] = False
         mask[np.arange(matrix.shape[0]), idx_min] = False
-    denom = n_total - 1 if n_total <= 6 else n_total - 2
+        denom = n_total - 2
+    else:
+        denom = n_total
     return (matrix * mask).sum(axis=1) / denom
 
+
+# def score_single(price_vec, K_vec, win_thr):
+#     diff = (K_vec - price_vec) / K_vec * 100.0
+#     return np.where(
+#         diff < 0,
+#         np.maximum(win_thr + diff, 60),
+#         np.where(
+#             diff <= 20,
+#             win_thr + diff,
+#             np.maximum(120 - diff, 60)
+#         )
+#     )
+
 def score_single(price_vec, K_vec, win_thr):
-    diff = (K_vec - price_vec) / K_vec * 100.0
-    return np.where(
-        diff < 0,
-        np.maximum(win_thr + diff, 60),
+    diff_ratio = (price_vec - K_vec) / K_vec * 100.0
+    diff_percent = np.ceil(np.abs(diff_ratio))  # 向上取整
+    scores = np.where(
+        price_vec == K_vec,
+        30.0,
         np.where(
-            diff <= 20,
-            win_thr + diff,
-            np.maximum(120 - diff, 60)
+            price_vec > K_vec,
+            np.maximum(30.0 - 0.5 * diff_percent, 0.0),
+            np.maximum(30.0 - 0.3 * diff_percent, 0.0)
         )
     )
+    return scores
+
+
 
 @app.get("/optimize")
 def optimize(
