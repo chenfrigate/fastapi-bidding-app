@@ -8,6 +8,10 @@ __pycache__/
 
 # Virtual environments
 biding-price/           # 你项目中出现的虚拟环境名（如有）
+venv/                   # 常见的虚拟环境目录
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
 
 # Distribution / packaging
 build/
