@@ -72,6 +72,7 @@ HTML_PAGE = """
 <body>
   <h1>报价决策评估系统</h1>
   <!-- 输入表单 -->
+  <h2>公共参数</h2>
   <label>我的报价 P:
     <input id="P" type="number" step="0.01" value="942.86">
   </label>
@@ -87,6 +88,7 @@ HTML_PAGE = """
         <input id="high_opp" type="number" step="0.01" placeholder="上限" value="1200">
     </div>
   </label>
+  <h2>计算胜率最高的伙伴报价</h2>
   <label>伙伴报价搜索区间:
     <div class="range-row">
         <input id="low_pat"  type="number" step="0.01" placeholder="最低价 L下限" value="600">
@@ -121,7 +123,7 @@ HTML_PAGE = """
   <button id="btn">计算最优报价</button>
 
 
-<h2>评估指定伙伴报价胜率</h2>
+<h2>评估指定的伙伴报价的胜率</h2>
   <label>伙伴报价 L, M, H:
     <div class="range-row">
       <input id="eval-L" type="number" step="0.01" placeholder="L" value="650">
@@ -146,6 +148,11 @@ HTML_PAGE = """
   <h3>采样结果</h3>
   <div id="sample-panel" style="overflow-x:auto; max-width:800px;">
     <!-- table 会被 JS 插入到这里 -->
+  </div>
+  
+  <!-- 用户说明链接 -->
+  <div style="margin-top: 20px;">
+    <a href="/user_guide" target="_blank">查看用户说明</a>
   </div>
 
 <script>
@@ -263,6 +270,10 @@ document.getElementById('btn').onclick = async () => {
         if (idx === 2) {
             td.classList.add('highlight');
         }
+        // 当胜利值为true时，设置该行字体颜色为绿色
+        if (idx === 5 && val === true) {
+            row.style.color = 'green';
+        }
         row.appendChild(td);
       });
       tbody.appendChild(row);
@@ -363,6 +374,10 @@ out.textContent = text;
         const td = document.createElement('td');
         td.textContent = v;
         if (idx === 2) td.classList.add('highlight');
+        // 当胜利值为true时，设置该行字体颜色为绿色
+        if (idx === 5 && v === true) {
+            row.style.color = 'green';
+        }
         row.appendChild(td);
       });
       tbody.appendChild(row);
@@ -383,59 +398,93 @@ out.textContent = text;
 def homepage():
     return HTML_PAGE
 
-# 核心函数：计算 K 
-# def calc_K(prices: np.ndarray) -> np.ndarray:
-#     # 排除最大、最小（若有）后求均值
-#     idx_max = prices.argmax(axis=1)
-#     idx_min = prices.argmin(axis=1)
-#     mask = np.ones_like(prices, bool)
-#     mask[np.arange(prices.shape[0]), idx_max] = False
-#     if prices.shape[1] >= 7:
-#         mask[np.arange(prices.shape[0]), idx_min] = False
-#     denom = prices.shape[1] - (2 if prices.shape[1] >= 7 else 1)
-#     return (prices * mask).sum(axis=1) / denom
+@app.get("/user_guide", response_class=HTMLResponse)
+def user_guide():
+    with open("user_guide.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 # 核心函数：计算 K（向量化版本） 新的评分逻辑
+# 评标基准价(K)计算方法:
+# 1.若有效评标价为小于等于 3 家时，则各投标人有效评标价的平均值 K 为评标基准价。【基准价计算公式:K= { (P1+P2+P3+...+Pn)/n)};(n≤3)】
+# 2.若有效评标价为 4-6 家时，则去掉最高有效评标价后其余各投标人有效评标价的平均值 K 为评标基准价。【基准价计算公式:K= {(P1+P2+P3+... +Pn-1)/(n-1)};(4≤n≤6)】
+# 3.若有效评标价为 7 家(含 7 家)以上时，则去掉最高有效评标价和最低有效评标价后其余各投标人有效评标价的平均值 K 为评标基准价。【基准价计算公式:K= {(P2+P3+P4+...+Pn-1)/(n-2)};(n≥ 7)】
 def calc_K(prices: np.ndarray) -> np.ndarray:
-    n = prices.shape[1]
-    idx_max = prices.argmax(axis=1)
-    idx_min = prices.argmin(axis=1)
-    mask = np.ones_like(prices, dtype=bool)
-    if n > 4:
+    n = prices.shape[1]  # 当前有效评标价数量
+    idx_max = prices.argmax(axis=1)  # 找出最高价的索引
+    idx_min = prices.argmin(axis=1)  # 找出最低价的索引
+    mask = np.ones_like(prices, dtype=bool)  # 创建掩码数组
+    
+    # 根据不同的区间应用不同的计算规则
+    if n <= 3:
+        # 有效评标价小于等于3家时，不排除任何价格
+        denom = n
+    elif 4 <= n <= 6:
+        # 有效评标价为4-6家时，只去掉最高价
+        mask[np.arange(prices.shape[0]), idx_max] = False
+        denom = n - 1
+    else:  # n >= 7
+        # 有效评标价为7家及以上时，去掉最高价和最低价
         mask[np.arange(prices.shape[0]), idx_max] = False
         mask[np.arange(prices.shape[0]), idx_min] = False
         denom = n - 2
-    else:
-        denom = n
+    
+    # 计算加权平均值作为评标基准价K
     return (prices * mask).sum(axis=1) / denom
 
 
 # 核心函数：按分数规则打分
-# def score(pd: np.ndarray, K: np.ndarray, thr: float) -> np.ndarray:
-#     diff = (K - pd) / K * 100
-#     # pd can be scalar or array
-#     return np.where(
-#         diff < 0,
-#         np.maximum(thr + diff, 60),
-#         np.where(
-#             diff <= 20,
-#             thr + diff,
-#             np.maximum(120 - diff, 60)
-#         )
-#     )
-
-def score(pd: np.ndarray, K: np.ndarray, thr: float) -> np.ndarray:
+# 报价分(100 分)计算办法:
+# (1)若评标价 P 等于 K 时，得 80 分(基准分);
+# (2)评标价 P 每高于评标基准价 1%在基准分基础上 扣 1 分，最低得 60 分;
+# (3)评标价 P 每低于评标基准价 1%在基准分基础上 加 1 分，最高为 100 分;
+# (4)若评标价 P 低于评标基准价 20%以上时，每再 低 1%在 100 分基础上扣 1 分;
+# (5)若评标价 P 低于评标基准价 40%以上时，得 80 分;
+# (6)中间采用插值法计算，分值计算保留小数点 后两位，小数点后第三位“四舍五入”。
+def score(pd: np.ndarray, K: np.ndarray, thr: float = 0.0) -> np.ndarray:
+    # 计算价格差异率（百分比）
     diff_ratio = (pd - K) / K * 100
-    diff_percent = np.ceil(np.abs(diff_ratio))  # 向上取整，单位为百分比
-    scores = np.where(
-        pd == K,
-        30.0,
-        np.where(
-            pd > K,
-            np.maximum(30.0 - 0.5 * diff_percent, 0.0),
-            np.maximum(30.0 - 0.3 * diff_percent, 0.0)
-        )
-    )
+    
+    # 创建一个与输入形状相同的数组用于存储分数
+    scores = np.zeros_like(diff_ratio, dtype=np.float64)
+    
+    # 条件1: 评标价等于基准价，得80分
+    mask_eq = (pd == K)
+    scores[mask_eq] = 80.0
+    
+    # 条件2: 评标价高于基准价
+    mask_gt = (pd > K)
+    # 每高1%扣1分，最低60分
+    scores[mask_gt] = np.maximum(80.0 - diff_ratio[mask_gt], 60.0)
+    
+    # 条件3-5: 评标价低于基准价
+    mask_lt = (pd < K)
+    diff_ratio_lt = -diff_ratio[mask_lt]  # 转换为正数以便计算
+    
+    # 条件5: 低于40%以上，得80分
+    mask_lt_40 = (diff_ratio_lt > 40)
+    scores_lt_40 = np.full_like(diff_ratio_lt[mask_lt_40], 80.0)
+    
+    # 条件4: 低于20%以上但不超过40%，每再低1%在100分基础上扣1分
+    mask_lt_20_40 = (diff_ratio_lt > 20) & (diff_ratio_lt <= 40)
+    # 先加20分到达100分，然后每超过20%的部分扣1分
+    scores_lt_20_40 = np.maximum(100.0 - (diff_ratio_lt[mask_lt_20_40] - 20), 80.0)
+    
+    # 条件3: 低于20%以内（含20%），每低1%加1分，最高100分
+    mask_lt_20 = (diff_ratio_lt <= 20)
+    scores_lt_20 = np.minimum(80.0 + diff_ratio_lt[mask_lt_20], 100.0)
+    
+    # 将各条件下的分数赋值回原数组
+    scores_lt = np.zeros_like(diff_ratio_lt)
+    scores_lt[mask_lt_40] = scores_lt_40
+    scores_lt[mask_lt_20_40] = scores_lt_20_40
+    scores_lt[mask_lt_20] = scores_lt_20
+    
+    # 将计算结果放回到总分数组中
+    scores[mask_lt] = scores_lt
+    
+    # 四舍五入到两位小数
+    scores = np.round(scores, 2)
+    
     return scores
 
 

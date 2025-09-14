@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>报价决策评估系统 - 用户说明</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 2em auto; line-height: 1.6; }
+    h1, h2, h3 { color: #333; }
+    p { margin: 1em 0; }
+    ul, ol { margin: 1em 0 1em 2em; }
+    code { background: #f5f5f5; padding: 0.2em 0.4em; border-radius: 3px; }
+    .section { margin-bottom: 2em; border-bottom: 1px solid #eee; padding-bottom: 1em; }
+    .btn-info { background: #f0f0f0; padding: 1em; border-radius: 5px; margin: 1em 0; }
+    .rule-box { background: #f9f9f9; padding: 1em; border-radius: 5px; border-left: 4px solid #333; margin: 1em 0; }
+  </style>
+</head>
+<body>
+  <h1>报价决策评估系统 - 用户说明</h1>
+  
+  <div class="section">
+    <h2>系统概述</h2>
+    <p>本系统用于评估和优化报价策略，帮助用户确定最优的伙伴报价组合，提高在投标过程中的胜率。</p>
+  </div>
+  
+  <div class="section">
+    <h2>按钮功能说明</h2>
+    
+    <div class="btn-info">
+      <h3>1. 计算最优报价</h3>
+      <p>此按钮用于通过贝叶斯优化算法，在指定的搜索区间内寻找能够最大化胜率的伙伴报价组合（L, M, H）。</p>
+      <ul>
+        <li>系统会根据用户设置的参数（如对手数量、报价区间、胜利阈值等）进行Monte-Carlo模拟</li>
+        <li>使用随机森林或高斯过程作为优化器，通过多次迭代寻找最优解</li>
+        <li>结果将显示最优的L、M、H值以及对应的胜率和95%置信区间</li>
+        <li>同时会展示部分采样结果，方便用户了解具体的模拟情况</li>
+      </ul>
+    </div>
+    
+    <div class="btn-info">
+      <h3>2. 计算报价胜率</h3>
+      <p>此按钮用于评估用户指定的伙伴报价组合（L, M, H）在当前参数设置下的胜率。</p>
+      <ul>
+        <li>用户需要手动输入伙伴报价的L、M、H值</li>
+        <li>系统会根据用户设置的参数进行Monte-Carlo模拟，计算该报价组合的胜率</li>
+        <li>结果将显示报价组合的胜率和95%置信区间</li>
+        <li>当对手数量为0时，系统会直接计算我方和伙伴的得分</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="section">
+    <h2>核心算法规则</h2>
+    
+    <div class="rule-box">
+      <h3>1. 计算基准价（K值）规则</h3>
+      <p>评标基准价(K)计算方法根据有效评标价的数量采用不同的规则：</p>
+      <ol>
+        <li><strong>有效评标价≤3家时</strong>：各投标人有效评标价的平均值为评标基准价<br>
+        计算公式：K = (P1+P2+P3+...+Pn)/n</li>
+        <li><strong>有效评标价为4-6家时</strong>：去掉最高有效评标价后，其余各投标人有效评标价的平均值为评标基准价<br>
+        计算公式：K = (P1+P2+P3+...+Pn-1)/(n-1)</li>
+        <li><strong>有效评标价≥7家时</strong>：去掉最高有效评标价和最低有效评标价后，其余各投标人有效评标价的平均值为评标基准价<br>
+        计算公式：K = (P2+P3+P4+...+Pn-1)/(n-2)</li>
+      </ol>
+    </div>
+    
+    <div class="rule-box">
+      <h3>2. 评分函数规则</h3>
+      <p>报价分(100分)计算办法根据评标价与基准价的差异率采用不同的规则：</p>
+      <ol>
+        <li><strong>评标价P等于K时</strong>：得80分(基准分)</li>
+        <li><strong>评标价P高于基准价</strong>：每高1%在基准分基础上扣1分，最低得60分</li>
+        <li><strong>评标价P低于基准价20%以内（含20%）</strong>：每低1%在基准分基础上加1分，最高为100分</li>
+        <li><strong>评标价P低于基准价20%以上但不超过40%</strong>：每再低1%在100分基础上扣1分</li>
+        <li><strong>评标价P低于基准价40%以上</strong>：得80分</li>
+        <li><strong>分值计算</strong>：保留小数点后两位，小数点后第三位"四舍五入"</li>
+      </ol>
+    </div>
+  </div>
+  
+  <div class="section">
+    <h2>胜率的含义</h2>
+    <p>在本系统中，<strong>胜率</strong>指的是在给定参数设置下，我方报价与伙伴报价组合能够赢得投标的概率。具体来说，胜利的条件是满足以下两者之一：</p>
+    <ul>
+      <li>我方得分≥胜利阈值（系统预设或用户指定的分数）</li>
+      <li>我方得分>所有对手的最高得分</li>
+    </ul>
+    <p>系统通过Monte-Carlo方法进行大量随机抽样模拟，计算满足胜利条件的次数占总模拟次数的比例，作为胜率的估计值。同时提供95%置信区间，反映这一估计的不确定性范围。</p>
+  </div>
+  
+  <div class="section">
+    <h2>采样结果表格说明</h2>
+    <p>采样结果表格展示了系统在模拟过程中的部分具体抽样案例，包含以下列：</p>
+    <ul>
+      <li><strong>R1-R5</strong>：各对手的报价（按从低到高排序，没有对手的位置显示"--"）</li>
+      <li><strong>K值</strong>：根据当前报价计算出的评标基准价</li>
+      <li><strong>我方分</strong>：我方报价对应的得分</li>
+      <li><strong>对手最高分</strong>：所有对手中的最高得分（高亮显示）</li>
+      <li><strong>≥阈值</strong>：我方得分是否大于等于胜利阈值</li>
+      <li><strong>>对手最高分</strong>：我方得分是否大于对手的最高得分</li>
+      <li><strong>胜利</strong>：是否满足胜利条件（胜利的行会以绿色字体显示）</li>
+    </ul>
+  </div>
+  
+  <div class="section">
+    <h2>参数说明</h2>
+    <ul>
+      <li><strong>我的报价P</strong>：我方的投标报价</li>
+      <li><strong>对手数量</strong>：参与投标的对手数量（0-5）</li>
+      <li><strong>对手报价区间</strong>：对手可能报价的范围（下限和上限）</li>
+      <li><strong>伙伴报价搜索区间</strong>：寻找最优伙伴报价的范围（下限和上限）</li>
+      <li><strong>胜利阈值</strong>：判定胜利的最低分数要求</li>
+      <li><strong>Monte-Carlo抽样次数</strong>：模拟的次数，次数越多结果越准确，但计算时间越长</li>
+      <li><strong>优化器类型</strong>：用于寻找最优解的算法（随机森林或高斯过程）</li>
+      <li><strong>采集函数</strong>：贝叶斯优化中用于选择下一个评估点的策略</li>
+      <li><strong>贝叶斯总调用次数</strong>：贝叶斯优化的总迭代次数</li>
+      <li><strong>初始随机点次数</strong>：贝叶斯优化开始前的随机采样次数</li>
+    </ul>
+  </div>
+  
+  <a href="/">返回主页面</a>
+</body>
+</html>
