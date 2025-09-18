@@ -74,24 +74,24 @@ HTML_PAGE = """
   <!-- 输入表单 -->
   <h2>公共参数</h2>
   <label>我的报价 P:
-    <input id="P" type="number" step="0.01" value="942.86">
+    <input id="P" type="number" step="0.01" value="958.9">
   </label>
   <label>对手数量:
     <select id="rivals">
-      <option>0</option><option>1</option><option>2</option><option>3</option>
-      <option>4</option><option selected>5</option>
+      <option>0</option><option>1</option><option selected>2</option><option>3</option>
+      <option>4</option><option>5</option>
     </select>
   </label>
   <label>对手报价区间:
     <div class="range-row">
-        <input id="low_opp" type="number" step="0.01" placeholder="下限" value="650">
-        <input id="high_opp" type="number" step="0.01" placeholder="上限" value="1200">
+        <input id="low_opp" type="number" step="0.01" placeholder="下限" value="450">
+        <input id="high_opp" type="number" step="0.01" placeholder="上限" value="470">
     </div>
   </label>
   <h2>计算胜率最高的伙伴报价</h2>
   <label>伙伴报价搜索区间:
     <div class="range-row">
-        <input id="low_pat"  type="number" step="0.01" placeholder="最低价 L下限" value="600">
+        <input id="low_pat"  type="number" step="0.01" placeholder="最低价 L下限" value="450">
         <input id="high_pat" type="number" step="0.01" placeholder="最高价 H上限" value="1200">
     </div>
   </label>
@@ -99,7 +99,7 @@ HTML_PAGE = """
     <input id="win_thr" type="number" value="80">
   </label>
   <label>Monte-Carlo 抽样次数 N_MC:
-    <input id="n_mc" type="number" value="1000000">
+    <input id="n_mc" type="number" value="500000">
   </label>
   <label>优化器类型:
   <select id="estimator">
@@ -135,7 +135,7 @@ HTML_PAGE = """
     <input id="eval-win_thr" type="number" value="80">
   </label>
   <label>Monte-Carlo 抽样次数 N_MC:
-    <input id="eval-n_mc" type="number" value="100000">
+    <input id="eval-n_mc" type="number" value="500000">
   </label>
   <button id="eval-btn">计算报价胜率</button>
 
@@ -621,16 +621,26 @@ def evaluate(
 
 
 def calc_K_vectorized(matrix):
-    n_total = matrix.shape[1]
-    idx_max = matrix.argmax(axis=1)
-    idx_min = matrix.argmin(axis=1)
-    mask = np.ones_like(matrix, dtype=bool)
-    if n_total > 4:
+    n_total = matrix.shape[1]  # 当前有效评标价数量
+    idx_max = matrix.argmax(axis=1)  # 找出最高价的索引
+    idx_min = matrix.argmin(axis=1)  # 找出最低价的索引
+    mask = np.ones_like(matrix, dtype=bool)  # 创建掩码数组
+    
+    # 根据不同的区间应用不同的计算规则
+    if n_total <= 3:
+        # 有效评标价小于等于3家时，不排除任何价格
+        denom = n_total
+    elif 4 <= n_total <= 6:
+        # 有效评标价为4-6家时，只去掉最高价
+        mask[np.arange(matrix.shape[0]), idx_max] = False
+        denom = n_total - 1
+    else:  # n >= 7
+        # 有效评标价为7家及以上时，去掉最高价和最低价
         mask[np.arange(matrix.shape[0]), idx_max] = False
         mask[np.arange(matrix.shape[0]), idx_min] = False
         denom = n_total - 2
-    else:
-        denom = n_total
+    
+    # 计算加权平均值作为评标基准价K
     return (matrix * mask).sum(axis=1) / denom
 
 
@@ -647,17 +657,54 @@ def calc_K_vectorized(matrix):
 #     )
 
 def score_single(price_vec, K_vec, win_thr):
-    diff_ratio = (price_vec - K_vec) / K_vec * 100.0
-    diff_percent = np.ceil(np.abs(diff_ratio))  # 向上取整
-    scores = np.where(
-        price_vec == K_vec,
-        30.0,
-        np.where(
-            price_vec > K_vec,
-            np.maximum(30.0 - 0.5 * diff_percent, 0.0),
-            np.maximum(30.0 - 0.3 * diff_percent, 0.0)
-        )
-    )
+    # 确保输入是NumPy数组，支持标量输入
+    price_arr = np.array(price_vec)
+    K_arr = np.array(K_vec)
+    
+    # 计算价格差异率（百分比）
+    diff_ratio = (price_arr - K_arr) / K_arr * 100
+    
+    # 创建一个与输入形状相同的数组用于存储分数
+    scores = np.zeros_like(diff_ratio, dtype=np.float64)
+    
+    # 条件1: 评标价等于基准价，得80分
+    mask_eq = (price_arr == K_arr)
+    scores[mask_eq] = 80.0
+    
+    # 条件2: 评标价高于基准价
+    mask_gt = (price_arr > K_arr)
+    # 每高1%扣1分，最低60分
+    scores[mask_gt] = np.maximum(80.0 - diff_ratio[mask_gt], 60.0)
+    
+    # 条件3-5: 评标价低于基准价
+    mask_lt = (price_arr < K_arr)
+    diff_ratio_lt = -diff_ratio[mask_lt]  # 转换为正数以便计算
+    
+    # 条件5: 低于40%以上，得80分
+    mask_lt_40 = (diff_ratio_lt > 40)
+    scores_lt_40 = np.full_like(diff_ratio_lt[mask_lt_40], 80.0)
+    
+    # 条件4: 低于20%以上但不超过40%，每再低1%在100分基础上扣1分
+    mask_lt_20_40 = (diff_ratio_lt > 20) & (diff_ratio_lt <= 40)
+    # 先加20分到达100分，然后每超过20%的部分扣1分
+    scores_lt_20_40 = np.maximum(100.0 - (diff_ratio_lt[mask_lt_20_40] - 20), 80.0)
+    
+    # 条件3: 低于20%以内（含20%），每低1%加1分，最高100分
+    mask_lt_20 = (diff_ratio_lt <= 20)
+    scores_lt_20 = np.minimum(80.0 + diff_ratio_lt[mask_lt_20], 100.0)
+    
+    # 将各条件下的分数赋值回原数组
+    scores_lt = np.zeros_like(diff_ratio_lt)
+    scores_lt[mask_lt_40] = scores_lt_40
+    scores_lt[mask_lt_20_40] = scores_lt_20_40
+    scores_lt[mask_lt_20] = scores_lt_20
+    
+    # 将计算结果放回到总分数组中
+    scores[mask_lt] = scores_lt
+    
+    # 四舍五入到两位小数
+    scores = np.round(scores, 2)
+    
     return scores
 
 
@@ -765,6 +812,16 @@ def optimize(
                 best_loss, best_x = loss, x
                 logging.info(f"  → New best found: loss={best_loss:.4f}, x={best_x}")
 
+        # 添加检查，确保best_x不为None
+        if best_x is None:
+            return JSONResponse({
+                "错误": "优化过程中未能找到有效解，请增加迭代次数或调整参数范围。",
+                "n_calls": n_calls,
+                "n_mc": n_mc,
+                "low_pat": low_pat,
+                "high_pat": high_pat
+            })
+        
         L_opt, M_opt, H_opt = best_x
         win_prob = 1 - best_loss
         succ     = int(win_prob * n_mc)
