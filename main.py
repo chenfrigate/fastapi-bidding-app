@@ -79,7 +79,7 @@ HTML_PAGE = """
   <label>对手数量:
     <select id="rivals">
       <option>0</option><option>1</option><option selected>2</option><option>3</option>
-      <option>4</option><option>5</option>
+      <option>4</option><option>5</option><option>6</option><option>7</option><option>8</option>
     </select>
   </label>
   <label>对手报价区间:
@@ -229,7 +229,7 @@ document.getElementById('btn').onclick = async () => {
     // —— 构建表头 —— 
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    ["R1", "R2", "R3", "R4", "R5",
+    ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8",
      "K 值", "我方分", "对手最高分",
      "≥阈值", ">对手最高分", "胜利"]
       .forEach(text => {
@@ -244,7 +244,7 @@ document.getElementById('btn').onclick = async () => {
     const tbody = document.createElement('tbody');
     samples.forEach(item => {
       const row = document.createElement('tr');
-      const bids = item["对手出价"]; // 已经是长度 5 的数组
+      const bids = item["对手出价"]; // 固定为长度 8 的数组（不足以 "--" 占位）
       const oppScores = item["对手得分列表"];
       const maxIdx = item["最高得分对手索引"];
       // 按列插入 R1…R5
@@ -344,7 +344,7 @@ out.textContent = text;
     // 表头
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    ["R1","R2","R3","R4","R5","K 值","我方分","对手最高分","≥阈值",">对手最高分","胜利"]
+    ["R1","R2","R3","R4","R5","R6","R7","R8","K 值","我方分","对手最高分","≥阈值",">对手最高分","胜利"]
       .forEach(t => {
         const th = document.createElement('th');
         th.textContent = t;
@@ -569,7 +569,7 @@ def evaluate(
             ge_thr    = my_sc >= win_thr
             beat_opp  = my_sc > opp_max
             victory   = bool(ge_thr or beat_opp)
-            bids      = list(np.round(single_rivals,2)) + ["--"]*(5-rivals)
+            bids      = list(np.round(single_rivals,2)) + ["--"]*(8-rivals)
 
             sample_results.append({
                 "对手出价": bids,
@@ -854,9 +854,9 @@ def optimize(
             beat_opp  = my_score > opp_max
             victory   = bool(ge_thr or beat_opp)
 
-            # 6) 对手出价列固定 5 列
+            # 6) 对手出价列固定 8 列
             bids = list(np.round(single_rivals, 2))
-            bids += ["--"] * (5 - len(bids))
+            bids += ["--"] * (8 - len(bids))
 
             sample_results.append({
                 "对手出价": bids,
